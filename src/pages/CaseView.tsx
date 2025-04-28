@@ -1,8 +1,11 @@
 import { useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import CaseWheel from "@/components/CaseWheel";
+import { useToast } from "@/components/ui/use-toast";
+import { useAuth } from "@/context/AuthContext";
+import LoginModal from "@/components/LoginModal";
 import cases from "@/data/cases";
 import { CaseItem } from "@/components/CaseCard";
 
@@ -16,7 +19,11 @@ const rarityClasses = {
 const CaseView = () => {
   const { id } = useParams<{ id: string }>();
   const [isOpening, setIsOpening] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const caseData = cases.find((c) => c.id === id);
+  const { isAuthenticated, user, updateBalance, addToInventory } = useAuth();
+  const { toast } = useToast();
+  const navigate = useNavigate();
 
   if (!caseData) {
     return (
@@ -34,19 +41,48 @@ const CaseView = () => {
     );
   }
 
+  const handleOpenCase = () => {
+    if (!isAuthenticated) {
+      setIsLoginModalOpen(true);
+      return;
+    }
+
+    // Проверка баланса
+    if (user && user.balance < caseData.price) {
+      toast({
+        title: "Недостаточно средств",
+        description: "Пожалуйста, пополните баланс для открытия кейса",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Списание средств
+    updateBalance(-caseData.price);
+    setIsOpening(true);
+  };
+
   const openCase = async (): Promise<CaseItem> => {
-    // Simulate API call with random outcome from case items
+    // Симуляция API-запроса с случайным результатом из предметов кейса
     return new Promise((resolve) => {
       setTimeout(() => {
         const randomIndex = Math.floor(Math.random() * caseData.items.length);
-        resolve(caseData.items[randomIndex]);
+        const item = caseData.items[randomIndex];
+        
+        // Добавляем выпавший предмет в инвентарь
+        addToInventory({
+          ...item,
+          id: `${item.id}_${Date.now()}`, // Уникальный ID для инвентаря
+        });
+        
+        resolve(item);
       }, 1000);
     });
   };
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Navbar balance={1000} />
+      <Navbar />
       
       <main className="flex-1 container mx-auto px-4 py-8">
         <div className="mb-4">
@@ -81,7 +117,7 @@ const CaseView = () => {
               
               <Button 
                 className="w-full"
-                onClick={() => setIsOpening(true)}
+                onClick={handleOpenCase}
               >
                 Открыть кейс
               </Button>
@@ -126,6 +162,11 @@ const CaseView = () => {
           onClose={() => setIsOpening(false)}
         />
       )}
+
+      <LoginModal 
+        isOpen={isLoginModalOpen} 
+        onClose={() => setIsLoginModalOpen(false)} 
+      />
     </div>
   );
 };
