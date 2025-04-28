@@ -1,0 +1,145 @@
+import { useState, useEffect, useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { CaseItem } from "./CaseCard";
+
+interface CaseWheelProps {
+  items: CaseItem[];
+  onOpenCase: () => Promise<CaseItem>;
+  onClose: () => void;
+}
+
+const rarityClasses = {
+  rare: "bg-case-rare/20 border-case-rare",
+  epic: "bg-case-epic/20 border-case-epic",
+  legendary: "bg-case-legendary/20 border-case-legendary",
+  mythical: "bg-case-mythical/20 border-case-mythical",
+};
+
+const CaseWheel = ({ items, onOpenCase, onClose }: CaseWheelProps) => {
+  const [isSpinning, setIsSpinning] = useState(false);
+  const [result, setResult] = useState<CaseItem | null>(null);
+  const [wheelItems, setWheelItems] = useState<CaseItem[]>([]);
+  const wheelRef = useRef<HTMLDivElement>(null);
+
+  // Generate random items for wheel with duplicates to make it longer
+  useEffect(() => {
+    const randomItems: CaseItem[] = [];
+    for (let i = 0; i < 50; i++) {
+      const randomItem = items[Math.floor(Math.random() * items.length)];
+      randomItems.push({...randomItem, id: `${randomItem.id}_${i}`});
+    }
+    setWheelItems(randomItems);
+  }, [items]);
+
+  const spinWheel = async () => {
+    setIsSpinning(true);
+    setResult(null);
+    
+    try {
+      // Get the winning item from the API
+      const winningItem = await onOpenCase();
+      
+      // Find where to stop the wheel
+      setTimeout(() => {
+        if (wheelRef.current) {
+          // Find a random occurrence of an item with the same name as the winning item
+          const matchingIndices = wheelItems
+            .map((item, index) => item.name === winningItem.name ? index : -1)
+            .filter(index => index !== -1);
+            
+          if (matchingIndices.length > 0) {
+            const randomMatchIndex = matchingIndices[Math.floor(Math.random() * matchingIndices.length)];
+            const targetPosition = randomMatchIndex * 160 + 80; // 160px width of each item + center offset
+            
+            if (wheelRef.current) {
+              wheelRef.current.style.transition = "transform 10s cubic-bezier(0.1, 0.7, 0.1, 1)";
+              wheelRef.current.style.transform = `translateX(-${targetPosition}px)`;
+            }
+            
+            setTimeout(() => {
+              setResult(winningItem);
+              setIsSpinning(false);
+            }, 10000); // Match the animation duration
+          }
+        }
+      }, 100);
+    } catch (error) {
+      console.error("Failed to open case:", error);
+      setIsSpinning(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+      <div className="bg-card border border-border p-6 rounded-lg w-full max-w-4xl">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold">Открытие кейса</h2>
+          <Button variant="ghost" onClick={onClose} disabled={isSpinning}>
+            ✕
+          </Button>
+        </div>
+        
+        <div className="relative overflow-hidden mb-8">
+          {/* Indicator */}
+          <div className="absolute top-0 bottom-0 left-1/2 w-0.5 bg-primary z-10 transform -translate-x-1/2"></div>
+          <div className="absolute top-1/2 left-1/2 w-4 h-4 bg-primary rounded-full z-10 transform -translate-x-1/2 -translate-y-1/2"></div>
+          
+          {/* Items reel */}
+          <div className="relative h-36 overflow-hidden border border-border rounded-lg">
+            <div 
+              ref={wheelRef}
+              className="flex absolute left-1/2 top-0 bottom-0 items-center transform -translate-x-1/2"
+              style={{ 
+                width: `${wheelItems.length * 160}px`,
+              }}
+            >
+              {wheelItems.map((item, index) => (
+                <div 
+                  key={`${item.id}_${index}`} 
+                  className={`w-40 h-28 mx-0.5 border-2 rounded flex flex-col items-center justify-center p-2 ${rarityClasses[item.rarity]}`}
+                >
+                  <img 
+                    src={item.image || "https://images.unsplash.com/photo-1608985929455-9e2f3eaed724?q=80&w=200&auto=format&fit=crop"} 
+                    alt={item.name} 
+                    className="h-16 w-auto object-contain mb-1" 
+                  />
+                  <div className="text-xs font-medium truncate w-full text-center">{item.name}</div>
+                  <div className="text-xs text-case-legendary">{item.price} ₽</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        
+        {result ? (
+          <div className="text-center mb-6 animate-fade-in">
+            <div className="text-xl font-bold mb-2">
+              Поздравляем! Вы получили:
+            </div>
+            <div className={`inline-block p-4 border-2 rounded-lg ${rarityClasses[result.rarity]}`}>
+              <img 
+                src={result.image || "https://images.unsplash.com/photo-1608985929455-9e2f3eaed724?q=80&w=200&auto=format&fit=crop"} 
+                alt={result.name} 
+                className="h-32 w-auto object-contain mx-auto mb-2" 
+              />
+              <div className="text-lg font-medium">{result.name}</div>
+              <div className="text-case-legendary font-medium">{result.price} ₽</div>
+            </div>
+          </div>
+        ) : null}
+        
+        <div className="flex justify-center">
+          <Button 
+            onClick={spinWheel} 
+            disabled={isSpinning}
+            className="px-8 py-2"
+          >
+            {isSpinning ? "Открываем..." : "Крутить"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default CaseWheel;
