@@ -34,7 +34,9 @@ const Crash = () => {
   const [hasWithdrawn, setHasWithdrawn] = useState<boolean>(false);
   const [betHistory, setBetHistory] = useState<BetHistory[]>([]);
   const [gameHistory, setGameHistory] = useState<GameHistory[]>([]);
+  const [countdownTimer, setCountdownTimer] = useState<number | null>(null);
   const timerRef = useRef<number | null>(null);
+  const countdownRef = useRef<number | null>(null);
   const crashPointRef = useRef<number>(0);
   
   useEffect(() => {
@@ -53,8 +55,27 @@ const Crash = () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+      }
     };
   }, []);
+  
+  const startCountdown = () => {
+    setCountdownTimer(3);
+    
+    countdownRef.current = window.setInterval(() => {
+      setCountdownTimer(prev => {
+        if (prev === null) return null;
+        if (prev <= 1) {
+          clearInterval(countdownRef.current!);
+          startGame();
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
   
   const startGame = () => {
     // Генерация случайной точки краша от 1 до 10 с экспоненциальным распределением
@@ -108,9 +129,9 @@ const Crash = () => {
           };
           setGameHistory(prev => [newGameHistory, ...prev].slice(0, 10));
           
-          // Автоматический запуск новой игры через 3 секунды
+          // Автоматический запуск обратного отсчета через 3 секунды
           setTimeout(() => {
-            startGame();
+            startCountdown();
           }, 3000);
           
           return nextValue;
@@ -190,10 +211,10 @@ const Crash = () => {
   };
   
   useEffect(() => {
-    if (!isGameRunning && !hasCrashed) {
-      startGame();
+    if (!isGameRunning && !hasCrashed && countdownTimer === null) {
+      startCountdown();
     }
-  }, [isGameRunning, hasCrashed]);
+  }, [isGameRunning, hasCrashed, countdownTimer]);
   
   const getMultiplierColorClass = (multiplier: number) => {
     if (multiplier < 1.5) return "text-yellow-500";
@@ -232,9 +253,15 @@ const Crash = () => {
                 <div className="relative h-80 bg-black/30 rounded-lg overflow-hidden mb-6">
                   {/* График (упрощенный) */}
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <div className={`text-6xl font-bold ${getMultiplierColorClass(currentMultiplier)} ${hasCrashed ? "animate-bounce" : ""}`}>
-                      {hasCrashed ? "CRASH!" : `${currentMultiplier.toFixed(2)}x`}
-                    </div>
+                    {countdownTimer !== null ? (
+                      <div className="text-6xl font-bold animate-pulse">
+                        {countdownTimer}
+                      </div>
+                    ) : (
+                      <div className={`text-6xl font-bold ${getMultiplierColorClass(currentMultiplier)} ${hasCrashed ? "animate-bounce" : ""}`}>
+                        {hasCrashed ? "CRASH!" : `${currentMultiplier.toFixed(2)}x`}
+                      </div>
+                    )}
                   </div>
                   
                   {/* Прогресс-бар */}
@@ -254,14 +281,13 @@ const Crash = () => {
                         type="number"
                         value={betAmount}
                         onChange={(e) => setBetAmount(e.target.value)}
-                        disabled={isBetting || !isAuthenticated}
+                        disabled={!isAuthenticated}
                         className="mr-2"
                       />
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => setBetAmount("100")}
-                        disabled={isBetting}
                       >
                         100
                       </Button>
@@ -276,14 +302,12 @@ const Crash = () => {
                         step="0.1"
                         value={autoWithdrawAt}
                         onChange={(e) => setAutoWithdrawAt(e.target.value)}
-                        disabled={isBetting}
                         className="mr-2"
                       />
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => setAutoWithdrawAt("2")}
-                        disabled={isBetting}
                       >
                         2x
                       </Button>
@@ -294,7 +318,7 @@ const Crash = () => {
               <CardFooter className="flex justify-between">
                 <Button
                   onClick={placeBet}
-                  disabled={isBetting || !isGameRunning || hasCrashed || !isAuthenticated}
+                  disabled={isBetting || !isAuthenticated || hasCrashed}
                   className="w-full md:w-auto mr-2"
                 >
                   Поставить

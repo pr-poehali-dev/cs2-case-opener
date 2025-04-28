@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 import { useAuth } from "@/context/AuthContext";
 import LoginModal from "@/components/LoginModal";
 import { useToast } from "@/components/ui/use-toast";
 import { InventoryItem } from "@/context/AuthContext";
 import cases from "@/data/cases";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 // Объединяем все предметы из всех кейсов для выбора цели апгрейда
 const allItems = cases.flatMap(caseItem => 
@@ -15,6 +15,14 @@ const allItems = cases.flatMap(caseItem =>
 
 // Сортируем по цене
 const sortedItems = [...allItems].sort((a, b) => a.price - b.price);
+
+// Шансы апгрейда
+const upgradeChances = [
+  { value: "10", label: "10%" },
+  { value: "30", label: "30%" },
+  { value: "50", label: "50%" },
+  { value: "70", label: "70%" },
+];
 
 const rarityClasses = {
   rare: "bg-case-rare/20 border-case-rare",
@@ -26,36 +34,42 @@ const rarityClasses = {
 const Upgrade = () => {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  const [possibleTargets, setPossibleTargets] = useState<any[]>([]);
   const [targetItem, setTargetItem] = useState<any | null>(null);
-  const [upgradeChance, setUpgradeChance] = useState(50);
+  const [upgradeChance, setUpgradeChance] = useState("50");
   const [isSpinning, setIsSpinning] = useState(false);
   const [spinResult, setSpinResult] = useState<"win" | "lose" | null>(null);
   const { isAuthenticated, user, updateBalance, removeFromInventory, addToInventory } = useAuth();
   const { toast } = useToast();
   const wheelRef = useRef<HTMLDivElement>(null);
 
-  // Выбираем целевой предмет на основе цены выбранного предмета и шанса
+  // Выбираем возможные целевые предметы на основе цены выбранного предмета и шанса
   useEffect(() => {
     if (selectedItem) {
-      const priceMultiplier = 100 / upgradeChance; // Чем ниже шанс, тем выше множитель
+      const chanceValue = parseInt(upgradeChance, 10);
+      const priceMultiplier = 100 / chanceValue; // Чем ниже шанс, тем выше множитель
       const targetPrice = selectedItem.price * priceMultiplier;
       
-      // Находим предмет с ближайшей ценой выше целевой
-      const possibleTargets = sortedItems.filter(item => item.price > selectedItem.price);
-      if (possibleTargets.length > 0) {
-        let closestItem = possibleTargets[0];
-        let minDiff = Math.abs(targetPrice - closestItem.price);
+      // Находим предметы с ценой выше текущего предмета
+      const filteredTargets = sortedItems.filter(item => item.price > selectedItem.price);
+      if (filteredTargets.length > 0) {
+        // Сортируем по близости к целевой цене
+        const sortedByTargetPrice = [...filteredTargets].sort((a, b) => 
+          Math.abs(a.price - targetPrice) - Math.abs(b.price - targetPrice)
+        );
         
-        for (const item of possibleTargets) {
-          const diff = Math.abs(targetPrice - item.price);
-          if (diff < minDiff) {
-            minDiff = diff;
-            closestItem = item;
-          }
-        }
+        // Берем от 3 до 10 предметов
+        const targets = sortedByTargetPrice.slice(0, Math.min(10, sortedByTargetPrice.length));
         
-        setTargetItem(closestItem);
+        setPossibleTargets(targets);
+        setTargetItem(targets[0] || null);
+      } else {
+        setPossibleTargets([]);
+        setTargetItem(null);
       }
+    } else {
+      setPossibleTargets([]);
+      setTargetItem(null);
     }
   }, [selectedItem, upgradeChance]);
 
@@ -110,7 +124,8 @@ const Upgrade = () => {
     setSpinResult(null);
     
     // Определяем результат апгрейда на основе шанса
-    const isSuccessful = Math.random() * 100 < upgradeChance;
+    const chanceValue = parseInt(upgradeChance, 10);
+    const isSuccessful = Math.random() * 100 < chanceValue;
     
     // Анимация колеса
     if (wheelRef.current) {
@@ -159,6 +174,10 @@ const Upgrade = () => {
         }, 2000);
       }, 5000);
     }
+  };
+
+  const selectTargetItem = (item: any) => {
+    setTargetItem(item);
   };
 
   return (
@@ -210,19 +229,16 @@ const Upgrade = () => {
                 <div className="bg-card border border-border rounded-lg p-6 mb-6">
                   <h2 className="text-lg font-bold mb-4">Шанс апгрейда</h2>
                   
-                  <div className="mb-4 flex items-center justify-between">
-                    <Slider
-                      value={[upgradeChance]}
-                      onValueChange={(value) => setUpgradeChance(value[0])}
-                      disabled={isSpinning}
-                      min={10}
-                      max={90}
-                      step={1}
-                      className="flex-1 mr-4"
-                    />
-                    <div className="text-lg font-bold w-14 text-right">
-                      {upgradeChance}%
-                    </div>
+                  <div className="mb-4">
+                    <ToggleGroup type="single" value={upgradeChance} onValueChange={(value) => {
+                      if (value) setUpgradeChance(value);
+                    }} className="justify-between">
+                      {upgradeChances.map((chance) => (
+                        <ToggleGroupItem key={chance.value} value={chance.value} disabled={isSpinning} className="w-[23%]">
+                          {chance.label}
+                        </ToggleGroupItem>
+                      ))}
+                    </ToggleGroup>
                   </div>
                 </div>
                 
@@ -244,13 +260,13 @@ const Upgrade = () => {
                         />
                         {/* Зеленая зона (шанс апгрейда) */}
                         <path
-                          d={`M 50,50 L 50,2 A 48,48 0 0,1 ${50 + 48 * Math.sin(upgradeChance / 100 * 2 * Math.PI)},${50 - 48 * Math.cos(upgradeChance / 100 * 2 * Math.PI)} Z`}
+                          d={`M 50,50 L 50,2 A 48,48 0 0,1 ${50 + 48 * Math.sin(parseInt(upgradeChance) / 100 * 2 * Math.PI)},${50 - 48 * Math.cos(parseInt(upgradeChance) / 100 * 2 * Math.PI)} Z`}
                           fill="#16a34a"
                           opacity="0.6"
                         />
                         {/* Красная зона (шанс проигрыша) */}
                         <path
-                          d={`M 50,50 L ${50 + 48 * Math.sin(upgradeChance / 100 * 2 * Math.PI)},${50 - 48 * Math.cos(upgradeChance / 100 * 2 * Math.PI)} A 48,48 0 1,1 50,2 Z`}
+                          d={`M 50,50 L ${50 + 48 * Math.sin(parseInt(upgradeChance) / 100 * 2 * Math.PI)},${50 - 48 * Math.cos(parseInt(upgradeChance) / 100 * 2 * Math.PI)} A 48,48 0 1,1 50,2 Z`}
                           fill="#dc2626"
                           opacity="0.6"
                         />
@@ -259,7 +275,7 @@ const Upgrade = () => {
                       {/* Стрелка */}
                       <div 
                         ref={wheelRef}
-                        className="absolute inset-0 transition-transform"
+                        className="absolute inset-0 z-10"
                         style={{ transformOrigin: "center" }}
                       >
                         <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -mt-2">
@@ -304,9 +320,10 @@ const Upgrade = () => {
           <div className="lg:col-span-1 bg-card border border-border rounded-lg p-6">
             <h2 className="text-xl font-bold mb-4">Целевой предмет</h2>
             
-            {selectedItem && targetItem ? (
-              <div className="flex flex-col items-center">
-                <div className={`border-2 rounded-lg p-6 ${rarityClasses[targetItem.rarity]}`}>
+            {selectedItem && possibleTargets.length > 0 ? (
+              <div className="flex flex-col">
+                {/* Выбранный целевой предмет */}
+                <div className={`border-2 rounded-lg p-6 mb-4 ${rarityClasses[targetItem.rarity]}`}>
                   <div className="h-48 flex items-center justify-center mb-4">
                     <img
                       src={targetItem.image}
@@ -327,10 +344,39 @@ const Upgrade = () => {
                   </div>
                 </div>
                 
-                <div className="mt-6">
+                {/* Коэффициент апгрейда */}
+                <div className="mb-4">
                   <div className="text-sm mb-2">Коэффициент апгрейда:</div>
                   <div className="text-2xl font-bold text-case-legendary">
                     x{(targetItem.price / selectedItem.price).toFixed(2)}
+                  </div>
+                </div>
+                
+                {/* Альтернативные варианты */}
+                <div>
+                  <h3 className="text-sm font-medium mb-2">Другие варианты:</h3>
+                  <div className="grid grid-cols-3 gap-2 max-h-[200px] overflow-y-auto">
+                    {possibleTargets.filter(item => item.id !== targetItem.id).map((item) => (
+                      <div 
+                        key={item.id} 
+                        className={`border rounded-lg p-2 cursor-pointer ${rarityClasses[item.rarity]} hover:ring-2 hover:ring-primary`}
+                        onClick={() => selectTargetItem(item)}
+                      >
+                        <div className="h-16 flex items-center justify-center mb-1">
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className="max-h-full object-contain"
+                          />
+                        </div>
+                        <div className="text-xs text-center font-medium truncate">
+                          {item.name}
+                        </div>
+                        <div className="text-xs text-center text-case-legendary">
+                          {item.price} ₽
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>

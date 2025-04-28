@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
+import { Badge } from "@/components/ui/badge";
 
 interface ContractItem {
   id: string;
@@ -20,13 +21,26 @@ const Contracts = () => {
   const [selectedItems, setSelectedItems] = useState<ContractItem[]>([]);
   const [result, setResult] = useState<ContractItem | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
 
   // Примеры скинов для контрактов
   const userItems = user?.inventory || [];
 
   const addToContract = (item: ContractItem) => {
     if (selectedItems.length < 10) {
+      // Проверка, был ли предмет уже добавлен
+      if (selectedItemIds.has(item.id)) {
+        toast({
+          title: "Предмет уже добавлен",
+          description: "Этот предмет уже добавлен в контракт",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Добавляем предмет и обновляем множество выбранных ID
       setSelectedItems([...selectedItems, item]);
+      setSelectedItemIds(new Set([...selectedItemIds, item.id]));
     } else {
       toast({
         title: "Достигнут лимит",
@@ -37,9 +51,15 @@ const Contracts = () => {
   };
 
   const removeFromContract = (index: number) => {
+    const itemToRemove = selectedItems[index];
     const newItems = [...selectedItems];
     newItems.splice(index, 1);
     setSelectedItems(newItems);
+    
+    // Обновляем множество выбранных ID
+    const newSelectedIds = new Set(selectedItemIds);
+    newSelectedIds.delete(itemToRemove.id);
+    setSelectedItemIds(newSelectedIds);
   };
 
   const executeContract = () => {
@@ -76,6 +96,7 @@ const Contracts = () => {
 
       // Очистка выбранных предметов
       setSelectedItems([]);
+      setSelectedItemIds(new Set());
 
       toast({
         title: "Контракт выполнен!",
@@ -131,7 +152,12 @@ const Contracts = () => {
                 <Tabs defaultValue="inventory">
                   <TabsList className="mb-4">
                     <TabsTrigger value="inventory">Ваш инвентарь</TabsTrigger>
-                    <TabsTrigger value="contract">Контракт ({selectedItems.length}/10)</TabsTrigger>
+                    <TabsTrigger value="contract">
+                      Контракт 
+                      <Badge variant="outline" className="ml-2">
+                        {selectedItems.length}/10
+                      </Badge>
+                    </TabsTrigger>
                   </TabsList>
                   
                   <TabsContent value="inventory">
@@ -140,7 +166,9 @@ const Contracts = () => {
                         {userItems.map((item) => (
                           <div 
                             key={item.id} 
-                            className="relative cursor-pointer border rounded-md overflow-hidden"
+                            className={`relative cursor-pointer border rounded-md overflow-hidden ${
+                              selectedItemIds.has(item.id) ? "opacity-50" : ""
+                            }`}
                             onClick={() => addToContract(item)}
                           >
                             <img src={item.image} alt={item.name} className="w-full aspect-square object-cover" />
@@ -148,6 +176,11 @@ const Contracts = () => {
                               <p className="text-xs truncate">{item.name}</p>
                               <p className={`text-xs font-bold text-case-${item.rarity}`}>{item.price} ₽</p>
                             </div>
+                            {selectedItemIds.has(item.id) && (
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                                <span className="text-white bg-green-600 p-1 rounded-full text-xs">✓</span>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
