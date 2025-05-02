@@ -23,17 +23,34 @@ const CaseWheel = ({ items, onOpenCase, onClose }: CaseWheelProps) => {
 
   // Generate random items for wheel with duplicates to make it longer
   useEffect(() => {
+    regenerateWheelItems();
+  }, [items]);
+
+  // Функция для создания новых случайных предметов при каждом спине
+  const regenerateWheelItems = () => {
     const randomItems: CaseItem[] = [];
     for (let i = 0; i < 50; i++) {
       const randomItem = items[Math.floor(Math.random() * items.length)];
-      randomItems.push({...randomItem, id: `${randomItem.id}_${i}`});
+      randomItems.push({...randomItem, id: `${randomItem.id}_${i}_${Date.now()}`});
     }
     setWheelItems(randomItems);
-  }, [items]);
+  };
 
   const spinWheel = async () => {
     setIsSpinning(true);
     setResult(null);
+    
+    // Генерируем новый набор предметов для каждого спина
+    regenerateWheelItems();
+    
+    // Сбрасываем позицию колеса
+    if (wheelRef.current) {
+      wheelRef.current.style.transition = "none";
+      wheelRef.current.style.transform = "translateX(0)";
+      
+      // Форсируем перерисовку
+      wheelRef.current.offsetHeight;
+    }
     
     try {
       // Get the winning item from the API
@@ -48,18 +65,32 @@ const CaseWheel = ({ items, onOpenCase, onClose }: CaseWheelProps) => {
             .filter(index => index !== -1);
             
           if (matchingIndices.length > 0) {
+            // Создаем полностью случайную анимацию каждый раз
+            const randomSpeed = 6 + Math.random() * 6; // от 6 до 12 секунд
+            
+            // Разные варианты кривых Безье для разнообразия анимации
+            const bezierCurves = [
+              `cubic-bezier(0.25, 0.1, 0.25, 1)`,
+              `cubic-bezier(0.42, 0, 0.58, 1)`,
+              `cubic-bezier(0.19, 1, 0.22, 1)`,
+              `cubic-bezier(0.68, -0.55, 0.27, 1.55)`,
+              `cubic-bezier(0.33, 1, 0.68, 1)`
+            ];
+            
+            const randomEasing = bezierCurves[Math.floor(Math.random() * bezierCurves.length)];
+            
             const randomMatchIndex = matchingIndices[Math.floor(Math.random() * matchingIndices.length)];
             const targetPosition = randomMatchIndex * 160 + 80; // 160px width of each item + center offset
             
             if (wheelRef.current) {
-              wheelRef.current.style.transition = "transform 10s cubic-bezier(0.1, 0.7, 0.1, 1)";
-              wheelRef.current.style.transform = `translateX(-${targetPosition}px)`;
+              wheelRef.current.style.transition = `transform ${randomSpeed}s ${randomEasing}`;
+              wheelRef.current.style.transform = `translateX(${-targetPosition}px)`;
             }
             
             setTimeout(() => {
               setResult(winningItem);
               setIsSpinning(false);
-            }, 10000); // Match the animation duration
+            }, randomSpeed * 1000); // Match the animation duration
           }
         }
       }, 100);
@@ -80,9 +111,8 @@ const CaseWheel = ({ items, onOpenCase, onClose }: CaseWheelProps) => {
         </div>
         
         <div className="relative overflow-hidden mb-8">
-          {/* Indicator */}
+          {/* Только линия без точки */}
           <div className="absolute top-0 bottom-0 left-1/2 w-0.5 bg-primary z-10 transform -translate-x-1/2"></div>
-          <div className="absolute top-1/2 left-1/2 w-4 h-4 bg-primary rounded-full z-10 transform -translate-x-1/2 -translate-y-1/2"></div>
           
           {/* Items reel */}
           <div className="relative h-36 overflow-hidden border border-border rounded-lg">

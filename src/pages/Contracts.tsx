@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { InventoryItem } from "@/context/AuthContext";
 
 interface ContractItem {
   id: string;
@@ -16,17 +17,24 @@ interface ContractItem {
 }
 
 const Contracts = () => {
-  const { user, isAuthenticated, updateBalance, addToInventory } = useAuth();
+  const { user, isAuthenticated, updateBalance, addToInventory, removeFromInventory } = useAuth();
   const { toast } = useToast();
   const [selectedItems, setSelectedItems] = useState<ContractItem[]>([]);
   const [result, setResult] = useState<ContractItem | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+  const [userInvItems, setUserInvItems] = useState<InventoryItem[]>([]);
 
-  // Примеры скинов для контрактов
-  const userItems = user?.inventory || [];
+  // Обновляем копию инвентаря пользователя при изменениях
+  useEffect(() => {
+    if (user?.inventory) {
+      setUserInvItems([...user.inventory]);
+    }
+  }, [user?.inventory]);
 
   const addToContract = (item: ContractItem) => {
+    if (isProcessing) return;
+    
     if (selectedItems.length < 10) {
       // Проверка, был ли предмет уже добавлен
       if (selectedItemIds.has(item.id)) {
@@ -51,6 +59,8 @@ const Contracts = () => {
   };
 
   const removeFromContract = (index: number) => {
+    if (isProcessing) return;
+    
     const itemToRemove = selectedItems[index];
     const newItems = [...selectedItems];
     newItems.splice(index, 1);
@@ -74,6 +84,14 @@ const Contracts = () => {
 
     setIsProcessing(true);
 
+    // Сразу удаляем все предметы из интерфейса
+    setUserInvItems(userInvItems.filter(item => !selectedItemIds.has(item.id)));
+
+    // Удаляем все предметы из инвентаря
+    selectedItems.forEach(item => {
+      removeFromInventory(item.id);
+    });
+
     // Расчет стоимости результата (средняя стоимость предметов + 10%)
     const totalValue = selectedItems.reduce((sum, item) => sum + item.price, 0);
     const resultValue = (totalValue / selectedItems.length) * 1.1;
@@ -89,8 +107,7 @@ const Contracts = () => {
       };
 
       setResult(resultItem);
-      setIsProcessing(false);
-
+      
       // Добавление предмета в инвентарь
       addToInventory(resultItem);
 
@@ -102,6 +119,11 @@ const Contracts = () => {
         title: "Контракт выполнен!",
         description: `Вы получили: ${resultItem.name} (${resultItem.price} ₽)`,
       });
+      
+      // Небольшая задержка перед разблокировкой интерфейса
+      setTimeout(() => {
+        setIsProcessing(false);
+      }, 1000);
     }, 2000);
   };
 
@@ -161,13 +183,13 @@ const Contracts = () => {
                   </TabsList>
                   
                   <TabsContent value="inventory">
-                    {userItems.length > 0 ? (
+                    {userInvItems.length > 0 ? (
                       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                        {userItems.map((item) => (
+                        {userInvItems.map((item) => (
                           <div 
                             key={item.id} 
                             className={`relative cursor-pointer border rounded-md overflow-hidden ${
-                              selectedItemIds.has(item.id) ? "opacity-50" : ""
+                              selectedItemIds.has(item.id) || isProcessing ? "opacity-50" : ""
                             }`}
                             onClick={() => addToContract(item)}
                           >
@@ -207,6 +229,7 @@ const Contracts = () => {
                             <button 
                               className="absolute top-2 right-2 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center"
                               onClick={() => removeFromContract(index)}
+                              disabled={isProcessing}
                             >
                               ×
                             </button>

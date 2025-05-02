@@ -39,9 +39,17 @@ const Upgrade = () => {
   const [upgradeChance, setUpgradeChance] = useState("50");
   const [isSpinning, setIsSpinning] = useState(false);
   const [spinResult, setSpinResult] = useState<"win" | "lose" | null>(null);
+  const [userInvItems, setUserInvItems] = useState<InventoryItem[]>([]);
   const { isAuthenticated, user, updateBalance, removeFromInventory, addToInventory } = useAuth();
   const { toast } = useToast();
   const wheelRef = useRef<HTMLDivElement>(null);
+
+  // Обновляем копию инвентаря пользователя при изменениях
+  useEffect(() => {
+    if (user?.inventory) {
+      setUserInvItems([...user.inventory]);
+    }
+  }, [user?.inventory]);
 
   // Выбираем возможные целевые предметы на основе цены выбранного предмета и шанса
   useEffect(() => {
@@ -98,7 +106,7 @@ const Upgrade = () => {
   }
 
   // Проверяем, есть ли предметы в инвентаре
-  if (user?.inventory.length === 0) {
+  if (userInvItems.length === 0) {
     return (
       <div className="min-h-screen flex flex-col">
         <Navbar />
@@ -120,6 +128,12 @@ const Upgrade = () => {
   const handleStartUpgrade = () => {
     if (!selectedItem || !targetItem) return;
     
+    // Удаляем предмет из локального состояния
+    setUserInvItems(userInvItems.filter(item => item.id !== selectedItem.id));
+    
+    // Удаляем предмет из инвентаря
+    removeFromInventory(selectedItem.id);
+    
     setIsSpinning(true);
     setSpinResult(null);
     
@@ -127,39 +141,45 @@ const Upgrade = () => {
     const chanceValue = parseInt(upgradeChance, 10);
     const isSuccessful = Math.random() * 100 < chanceValue;
     
-    // Анимация колеса
+    // Анимация колеса - всегда вращается только по часовой стрелке
     if (wheelRef.current) {
       const fullRotation = 360;
-      const additionalRotation = isSuccessful 
-        ? 20 + Math.random() * 40 // Попадание в зеленую зону
-        : 180 + Math.random() * 160; // Попадание в красную зону
+      
+      // Случайная анимация для каждого апгрейда
+      const randomSpeed = 4 + Math.random(); // от 4 до 5 секунд
+      const randomEasing = `cubic-bezier(${0.3 + Math.random() * 0.1}, ${0.8 + Math.random() * 0.1}, ${0.2 + Math.random() * 0.1}, 1)`;
+      
+      let additionalRotation;
+      if (isSuccessful) {
+        // Попадание в зеленую зону (в верхней части колеса)
+        additionalRotation = 20 + Math.random() * 40;
+      } else {
+        // Попадание в красную зону, но всегда по часовой стрелке
+        additionalRotation = 180 + Math.random() * 160;
+      }
       
       const totalRotation = fullRotation * 5 + additionalRotation; // 5 полных оборотов + результат
       
-      wheelRef.current.style.transition = "transform 5s cubic-bezier(0.32, 0.94, 0.6, 1)";
+      wheelRef.current.style.transition = `transform ${randomSpeed}s ${randomEasing}`;
       wheelRef.current.style.transform = `rotate(${totalRotation}deg)`;
       
       setTimeout(() => {
         setSpinResult(isSuccessful ? "win" : "lose");
         
         if (isSuccessful) {
-          // Удаляем старый предмет
-          removeFromInventory(selectedItem.id);
-          
-          // Добавляем новый предмет
-          addToInventory({
+          // Добавляем новый предмет в инвентарь только при успешном апгрейде
+          const newItem = {
             ...targetItem,
             id: `${targetItem.id}_${Date.now()}`, // Уникальный ID для инвентаря
-          });
+          };
+          
+          addToInventory(newItem);
           
           toast({
             title: "Успешный апгрейд!",
             description: `Вы успешно улучшили предмет до ${targetItem.name}`,
           });
         } else {
-          // Удаляем предмет при проигрыше
-          removeFromInventory(selectedItem.id);
-          
           toast({
             title: "Неудачный апгрейд",
             description: "К сожалению, ваш предмет был потерян при апгрейде",
@@ -172,7 +192,7 @@ const Upgrade = () => {
           setSelectedItem(null);
           setIsSpinning(false);
         }, 2000);
-      }, 5000);
+      }, randomSpeed * 1000);
     }
   };
 
@@ -193,7 +213,7 @@ const Upgrade = () => {
             <h2 className="text-xl font-bold mb-4">Выберите предмет</h2>
             
             <div className="grid grid-cols-2 gap-4 max-h-[500px] overflow-y-auto">
-              {user?.inventory.map((item) => (
+              {userInvItems.map((item) => (
                 <div 
                   key={item.id} 
                   className={`border-2 rounded-lg p-3 cursor-pointer transition-all ${
@@ -201,7 +221,7 @@ const Upgrade = () => {
                       ? `${rarityClasses[item.rarity]} ring-2 ring-primary` 
                       : `${rarityClasses[item.rarity]} opacity-70 hover:opacity-100`
                   }`}
-                  onClick={() => setSelectedItem(item)}
+                  onClick={() => !isSpinning && setSelectedItem(item)}
                 >
                   <div className="h-24 flex items-center justify-center mb-2">
                     <img
@@ -231,7 +251,7 @@ const Upgrade = () => {
                   
                   <div className="mb-4">
                     <ToggleGroup type="single" value={upgradeChance} onValueChange={(value) => {
-                      if (value) setUpgradeChance(value);
+                      if (value && !isSpinning) setUpgradeChance(value);
                     }} className="justify-between">
                       {upgradeChances.map((chance) => (
                         <ToggleGroupItem key={chance.value} value={chance.value} disabled={isSpinning} className="w-[23%]">
@@ -360,7 +380,7 @@ const Upgrade = () => {
                       <div 
                         key={item.id} 
                         className={`border rounded-lg p-2 cursor-pointer ${rarityClasses[item.rarity]} hover:ring-2 hover:ring-primary`}
-                        onClick={() => selectTargetItem(item)}
+                        onClick={() => !isSpinning && selectTargetItem(item)}
                       >
                         <div className="h-16 flex items-center justify-center mb-1">
                           <img
