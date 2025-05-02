@@ -42,7 +42,7 @@ const Upgrade = () => {
   const { isAuthenticated, user, updateBalance, removeFromInventory, addToInventory } = useAuth();
   const { toast } = useToast();
   const wheelRef = useRef<HTMLDivElement>(null);
-  const pointerRef = useRef<HTMLDivElement>(null);
+  const arrowRef = useRef<HTMLDivElement>(null);
 
   // Обновляем копию инвентаря пользователя при изменениях
   useEffect(() => {
@@ -151,7 +151,7 @@ const Upgrade = () => {
     const isSuccessful = Math.random() * 100 < upgradeChance;
     
     // Анимация вращения стрелки
-    if (pointerRef.current) {
+    if (arrowRef.current) {
       // Определяем угол, куда повернется стрелка
       let finalAngle: number;
       
@@ -183,8 +183,8 @@ const Upgrade = () => {
       const randomEasing = easingFunctions[Math.floor(Math.random() * easingFunctions.length)];
       
       // Применяем анимацию
-      pointerRef.current.style.transition = `transform ${spinDuration}s ${randomEasing}`;
-      pointerRef.current.style.transform = `rotate(${totalAngle}deg)`;
+      arrowRef.current.style.transition = `transform ${spinDuration}s ${randomEasing}`;
+      arrowRef.current.style.transform = `rotate(${totalAngle}deg)`;
       
       setTimeout(() => {
         setSpinResult(isSuccessful ? "win" : "lose");
@@ -216,9 +216,9 @@ const Upgrade = () => {
           setIsSpinning(false);
           
           // Сбрасываем позицию стрелки (без анимации)
-          if (pointerRef.current) {
-            pointerRef.current.style.transition = 'none';
-            pointerRef.current.style.transform = 'rotate(0deg)';
+          if (arrowRef.current) {
+            arrowRef.current.style.transition = 'none';
+            arrowRef.current.style.transform = 'rotate(0deg)';
           }
         }, 2000);
       }, spinDuration * 1000);
@@ -371,7 +371,7 @@ const Upgrade = () => {
                       )}
                     </div>
                     
-                    {/* Новое круговое колесо апгрейда */}
+                    {/* Новое круговое колесо апгрейда со стрелкой */}
                     <div className="relative w-64 h-64 mb-4">
                       {/* Круг с зеленой и красной секциями */}
                       <svg className="w-full h-full" viewBox="0 0 100 100">
@@ -411,15 +411,17 @@ const Upgrade = () => {
                         />
                       </svg>
                       
-                      {/* Стрелка-указатель */}
+                      {/* Стрелка-указатель (заменена на настоящую стрелку) */}
                       <div 
-                        ref={pointerRef}
+                        ref={arrowRef}
                         className="absolute top-0 left-0 w-full h-full"
                         style={{ transformOrigin: 'center' }}
                       >
-                        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 h-1/2 flex flex-col items-center">
-                          <div className="w-1 h-full bg-white"></div>
-                          <div className="w-3 h-3 bg-white rounded-full -mt-1.5"></div>
+                        <div className="absolute top-0 left-1/2 transform -translate-x-1/2">
+                          <svg width="20" height="52" viewBox="0 0 20 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M10 0L18.6603 15H1.33975L10 0Z" fill="white"/>
+                            <rect x="9" y="12" width="2" height="40" fill="white"/>
+                          </svg>
                         </div>
                       </div>
                       

@@ -37,7 +37,8 @@ const Inventory = () => {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [isSellDialogOpen, setIsSellDialogOpen] = useState(false);
-  const { isAuthenticated, user, updateBalance, removeFromInventory } = useAuth();
+  const [isSellAllDialogOpen, setIsSellAllDialogOpen] = useState(false);
+  const { isAuthenticated, user, updateBalance, removeFromInventory, clearInventory } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -85,21 +86,21 @@ const Inventory = () => {
 
   const handleSellAllItems = () => {
     if (user?.inventory && user.inventory.length > 0) {
-      // Считаем общую стоимость всех предметов
-      const totalValue = user.inventory.reduce((sum, item) => sum + item.price, 0);
+      // Подсчитываем общую стоимость
+      const totalValue = calculateTotalValue();
       
       // Добавляем общую стоимость к балансу пользователя
       updateBalance(totalValue);
       
-      // Удаляем все предметы из инвентаря
-      user.inventory.forEach(item => {
-        removeFromInventory(item.id);
-      });
+      // Очищаем весь инвентарь
+      clearInventory();
       
       toast({
         title: "Все предметы проданы",
         description: `Вы продали ${user.inventory.length} предметов за ${totalValue} ₽`,
       });
+      
+      setIsSellAllDialogOpen(false);
     }
   };
 
@@ -119,30 +120,13 @@ const Inventory = () => {
           <h1 className="text-3xl font-bold">Ваш инвентарь</h1>
           
           {user?.inventory && user.inventory.length > 0 && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive">
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Продать всё ({calculateTotalValue()} ₽)
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Продать все предметы?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Вы уверены, что хотите продать все предметы из инвентаря? 
-                    Вы получите {calculateTotalValue()} ₽ на баланс.
-                    Это действие нельзя отменить.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Отмена</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleSellAllItems}>
-                    Продать всё
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <Button 
+              variant="destructive" 
+              onClick={() => setIsSellAllDialogOpen(true)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Продать всё ({calculateTotalValue()} ₽)
+            </Button>
           )}
         </div>
         
@@ -192,7 +176,7 @@ const Inventory = () => {
         )}
       </main>
 
-      {/* Диалог подтверждения продажи */}
+      {/* Диалог подтверждения продажи одного предмета */}
       <Dialog open={isSellDialogOpen} onOpenChange={setIsSellDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -224,6 +208,29 @@ const Inventory = () => {
             </Button>
             <Button onClick={handleSellItem}>
               Продать за {selectedItem?.price} ₽
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Диалог подтверждения продажи всех предметов */}
+      <Dialog open={isSellAllDialogOpen} onOpenChange={setIsSellAllDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Продать все предметы</DialogTitle>
+            <DialogDescription>
+              Вы уверены, что хотите продать все предметы из инвентаря? 
+              Вы получите {calculateTotalValue()} ₽ на баланс.
+              Это действие нельзя отменить.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsSellAllDialogOpen(false)}>
+              Отмена
+            </Button>
+            <Button variant="destructive" onClick={handleSellAllItems}>
+              Продать все предметы ({user?.inventory.length} шт.)
             </Button>
           </DialogFooter>
         </DialogContent>
