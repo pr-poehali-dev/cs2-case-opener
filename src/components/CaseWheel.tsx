@@ -21,77 +21,78 @@ const CaseWheel = ({ items, onOpenCase, onClose }: CaseWheelProps) => {
   const [wheelItems, setWheelItems] = useState<CaseItem[]>([]);
   const wheelRef = useRef<HTMLDivElement>(null);
 
-  // Generate random items for wheel with duplicates to make it longer
-  useEffect(() => {
-    regenerateWheelItems();
-  }, [items]);
-
-  // Функция для создания новых случайных предметов при каждом спине
-  const regenerateWheelItems = () => {
+  // Функция для создания списка предметов для колеса, включая победный предмет
+  const generateWheelItems = (winningItem: CaseItem) => {
+    // Создаем копию списка предметов, чтобы не изменять оригинал
     const randomItems: CaseItem[] = [];
-    for (let i = 0; i < 50; i++) {
+    
+    // Добавляем случайные предметы (примерно 35-45 предметов)
+    const itemCount = 35 + Math.floor(Math.random() * 10);
+    for (let i = 0; i < itemCount; i++) {
       const randomItem = items[Math.floor(Math.random() * items.length)];
       randomItems.push({...randomItem, id: `${randomItem.id}_${i}_${Date.now()}`});
     }
-    setWheelItems(randomItems);
+    
+    // Определяем позицию для выигрышного предмета (примерно во второй половине колеса)
+    const winningPosition = Math.floor(itemCount * 0.6) + Math.floor(Math.random() * (itemCount * 0.3));
+    
+    // Вставляем точную копию выигрышного предмета в нужную позицию
+    randomItems[winningPosition] = {...winningItem, id: `${winningItem.id}_winning_${Date.now()}`};
+    
+    return { items: randomItems, winningPosition };
   };
 
   const spinWheel = async () => {
     setIsSpinning(true);
     setResult(null);
     
-    // Генерируем новый набор предметов для каждого спина
-    regenerateWheelItems();
-    
-    // Сбрасываем позицию колеса
-    if (wheelRef.current) {
-      wheelRef.current.style.transition = "none";
-      wheelRef.current.style.transform = "translateX(0)";
-      
-      // Форсируем перерисовку
-      wheelRef.current.offsetHeight;
-    }
-    
     try {
-      // Get the winning item from the API
+      // Получаем выигрышный предмет от API
       const winningItem = await onOpenCase();
       
-      // Find where to stop the wheel
+      // Генерируем новые предметы для колеса с выигрышным предметом в определенной позиции
+      const { items: newWheelItems, winningPosition } = generateWheelItems(winningItem);
+      setWheelItems(newWheelItems);
+      
+      // Сбрасываем позицию колеса
+      if (wheelRef.current) {
+        wheelRef.current.style.transition = "none";
+        wheelRef.current.style.transform = "translateX(0)";
+        
+        // Форсируем перерисовку
+        wheelRef.current.offsetHeight;
+      }
+      
+      // Запускаем анимацию прокрутки к выигрышному предмету
       setTimeout(() => {
         if (wheelRef.current) {
-          // Find a random occurrence of an item with the same name as the winning item
-          const matchingIndices = wheelItems
-            .map((item, index) => item.name === winningItem.name ? index : -1)
-            .filter(index => index !== -1);
-            
-          if (matchingIndices.length > 0) {
-            // Создаем полностью случайную анимацию каждый раз
-            const randomSpeed = 6 + Math.random() * 6; // от 6 до 12 секунд
-            
-            // Разные варианты кривых Безье для разнообразия анимации
-            const bezierCurves = [
-              `cubic-bezier(0.25, 0.1, 0.25, 1)`,
-              `cubic-bezier(0.42, 0, 0.58, 1)`,
-              `cubic-bezier(0.19, 1, 0.22, 1)`,
-              `cubic-bezier(0.68, -0.55, 0.27, 1.55)`,
-              `cubic-bezier(0.33, 1, 0.68, 1)`
-            ];
-            
-            const randomEasing = bezierCurves[Math.floor(Math.random() * bezierCurves.length)];
-            
-            const randomMatchIndex = matchingIndices[Math.floor(Math.random() * matchingIndices.length)];
-            const targetPosition = randomMatchIndex * 160 + 80; // 160px width of each item + center offset
-            
-            if (wheelRef.current) {
-              wheelRef.current.style.transition = `transform ${randomSpeed}s ${randomEasing}`;
-              wheelRef.current.style.transform = `translateX(${-targetPosition}px)`;
-            }
-            
-            setTimeout(() => {
-              setResult(winningItem);
-              setIsSpinning(false);
-            }, randomSpeed * 1000); // Match the animation duration
+          // Рассчитываем позицию выигрышного предмета
+          const targetPosition = winningPosition * 160 + 80; // 160px width of each item + center offset
+          
+          // Создаем полностью случайную анимацию каждый раз
+          const randomSpeed = 6 + Math.random() * 6; // от 6 до 12 секунд
+          
+          // Разные варианты кривых Безье для разнообразия анимации
+          const bezierCurves = [
+            `cubic-bezier(0.25, 0.1, 0.25, 1)`,
+            `cubic-bezier(0.42, 0, 0.58, 1)`,
+            `cubic-bezier(0.19, 1, 0.22, 1)`,
+            `cubic-bezier(0.68, -0.55, 0.27, 1.55)`,
+            `cubic-bezier(0.33, 1, 0.68, 1)`
+          ];
+          
+          const randomEasing = bezierCurves[Math.floor(Math.random() * bezierCurves.length)];
+          
+          if (wheelRef.current) {
+            wheelRef.current.style.transition = `transform ${randomSpeed}s ${randomEasing}`;
+            wheelRef.current.style.transform = `translateX(${-targetPosition}px)`;
           }
+          
+          // Устанавливаем результат после завершения анимации
+          setTimeout(() => {
+            setResult(winningItem);
+            setIsSpinning(false);
+          }, randomSpeed * 1000); // Продолжительность анимации
         }
       }, 100);
     } catch (error) {
