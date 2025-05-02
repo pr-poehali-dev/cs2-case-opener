@@ -10,9 +10,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
 import LoginModal from "@/components/LoginModal";
+import { Trash2 } from "lucide-react";
 
 const rarityClasses = {
   rare: "bg-case-rare/20 border-case-rare",
@@ -71,12 +83,68 @@ const Inventory = () => {
     }
   };
 
+  const handleSellAllItems = () => {
+    if (user?.inventory && user.inventory.length > 0) {
+      // Считаем общую стоимость всех предметов
+      const totalValue = user.inventory.reduce((sum, item) => sum + item.price, 0);
+      
+      // Добавляем общую стоимость к балансу пользователя
+      updateBalance(totalValue);
+      
+      // Удаляем все предметы из инвентаря
+      user.inventory.forEach(item => {
+        removeFromInventory(item.id);
+      });
+      
+      toast({
+        title: "Все предметы проданы",
+        description: `Вы продали ${user.inventory.length} предметов за ${totalValue} ₽`,
+      });
+    }
+  };
+
+  const calculateTotalValue = () => {
+    if (user?.inventory && user.inventory.length > 0) {
+      return user.inventory.reduce((sum, item) => sum + item.price, 0);
+    }
+    return 0;
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
       
       <main className="flex-1 container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-6">Ваш инвентарь</h1>
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold">Ваш инвентарь</h1>
+          
+          {user?.inventory && user.inventory.length > 0 && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Продать всё ({calculateTotalValue()} ₽)
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Продать все предметы?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Вы уверены, что хотите продать все предметы из инвентаря? 
+                    Вы получите {calculateTotalValue()} ₽ на баланс.
+                    Это действие нельзя отменить.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Отмена</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleSellAllItems}>
+                    Продать всё
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+        </div>
         
         {user?.inventory.length === 0 ? (
           <div className="text-center p-12 bg-card border border-border rounded-lg">
