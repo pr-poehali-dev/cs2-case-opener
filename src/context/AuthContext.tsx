@@ -8,6 +8,12 @@ export interface InventoryItem {
   rarity: string;
 }
 
+export interface DropHistory {
+  username: string;
+  item: InventoryItem;
+  timestamp: number;
+}
+
 interface UserInfo {
   username: string;
   balance: number;
@@ -22,8 +28,18 @@ interface AuthContextProps {
   updateBalance: (amount: number) => void;
   addToInventory: (item: InventoryItem) => void;
   removeFromInventory: (itemId: string) => void;
-  clearInventory: () => void; // Новый метод для очистки инвентаря
+  clearInventory: () => void;
+  dropHistory: DropHistory[];
+  addToDropHistory: (item: InventoryItem) => void;
 }
+
+// Список реальных имен для истории выпадений
+const realNames = [
+  "Игорь_2007", "xXDragon_SlayerXx", "ProGamer99", "КиберБУЛЬБАШ", 
+  "MrSniper", "Васян228", "DestroyerPRO", "Lady_Kill", "HunterOfShadows",
+  "ПростоПавел", "Semen4ik", "Мажор1337", "CS_Мастер", "Анимешник", 
+  "Геймер_с_опытом", "ФорсМажор", "Стас_АК47", "GoodRusPlayer", "AWP_Monster"
+];
 
 // Создаем контекст с начальными значениями
 const AuthContext = createContext<AuthContextProps>({
@@ -35,6 +51,8 @@ const AuthContext = createContext<AuthContextProps>({
   addToInventory: () => {},
   removeFromInventory: () => {},
   clearInventory: () => {},
+  dropHistory: [],
+  addToDropHistory: () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -51,11 +69,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return saved ? JSON.parse(saved) : null;
   });
 
+  // История выпадений предметов
+  const [dropHistory, setDropHistory] = useState<DropHistory[]>(() => {
+    const saved = localStorage.getItem("dropHistory");
+    return saved ? JSON.parse(saved) : [];
+  });
+
   // Сохраняем состояние в localStorage при изменении
   useEffect(() => {
     localStorage.setItem("isAuthenticated", JSON.stringify(isAuthenticated));
     localStorage.setItem("user", JSON.stringify(user));
-  }, [isAuthenticated, user]);
+    localStorage.setItem("dropHistory", JSON.stringify(dropHistory));
+  }, [isAuthenticated, user, dropHistory]);
+
+  // Создаем начальную историю выпадений при первой загрузке
+  useEffect(() => {
+    if (dropHistory.length === 0) {
+      // Генерируем историю из случайных предметов
+      const initialHistory: DropHistory[] = [];
+      
+      // Импортируем все кейсы и создаем начальную историю
+      import("@/data/cases").then((module) => {
+        const allCases = module.default;
+        const allItems = allCases.flatMap(caseItem => caseItem.items);
+        
+        // Генерируем 20 случайных выпадений
+        for (let i = 0; i < 20; i++) {
+          const randomItem = allItems[Math.floor(Math.random() * allItems.length)];
+          const randomName = realNames[Math.floor(Math.random() * realNames.length)];
+          // Время в течение последних 24 часов
+          const randomTime = Date.now() - Math.floor(Math.random() * 24 * 60 * 60 * 1000);
+          
+          initialHistory.push({
+            username: randomName,
+            item: { ...randomItem },
+            timestamp: randomTime
+          });
+        }
+        
+        // Сортируем по времени (новые сверху)
+        initialHistory.sort((a, b) => b.timestamp - a.timestamp);
+        setDropHistory(initialHistory);
+      });
+    }
+  }, []);
 
   // Функция для входа в систему
   const login = (username: string, password: string) => {
@@ -119,6 +176,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Функция для добавления предмета в историю выпадений
+  const addToDropHistory = (item: InventoryItem) => {
+    if (user) {
+      const newDrop: DropHistory = {
+        username: user.username,
+        item,
+        timestamp: Date.now()
+      };
+      
+      // Добавляем в начало массива (новые сверху)
+      setDropHistory(prevHistory => [newDrop, ...prevHistory]);
+    }
+  };
+
   return (
     <AuthContext.Provider 
       value={{ 
@@ -130,6 +201,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addToInventory, 
         removeFromInventory,
         clearInventory,
+        dropHistory,
+        addToDropHistory
       }}
     >
       {children}

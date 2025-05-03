@@ -1,90 +1,215 @@
+import { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
 import CaseCard from "@/components/CaseCard";
 import { Button } from "@/components/ui/button";
-import cases from "@/data/cases";
+import { useAuth } from "@/context/AuthContext";
+import { cases } from "@/data/cases";
+import CaseWheel from "@/components/CaseWheel";
+import DropHistoryFeed from "@/components/DropHistoryFeed";
 
 const Index = () => {
+  const [selectedCase, setSelectedCase] = useState(null);
+  const [isSpinning, setIsSpinning] = useState(false);
+  const [winItem, setWinItem] = useState(null);
+  const { isAuthenticated, user, updateBalance, addToInventory, addToDropHistory } = useAuth();
+
+  const openCase = (selectedCase) => {
+    if (!isAuthenticated) {
+      // Если пользователь не авторизован, не открываем кейс
+      return;
+    }
+    
+    // Проверяем, достаточно ли средств
+    if (user.balance < selectedCase.price) {
+      alert("Недостаточно средств для открытия кейса");
+      return;
+    }
+    
+    // Списываем стоимость кейса с баланса
+    updateBalance(-selectedCase.price);
+    
+    // Устанавливаем состояние вращения
+    setIsSpinning(true);
+    
+    // Через 5 секунд определяем выигрыш
+    setTimeout(() => {
+      // Выбираем случайный предмет из кейса
+      const randomItem = selectedCase.items[Math.floor(Math.random() * selectedCase.items.length)];
+      
+      // Создаем уникальный ID для предмета
+      const itemWithId = {
+        ...randomItem,
+        id: `${randomItem.id}_${Date.now()}`
+      };
+      
+      // Устанавливаем выигранный предмет
+      setWinItem(itemWithId);
+      
+      // Останавливаем вращение
+      setIsSpinning(false);
+      
+      // Добавляем в историю выпадений
+      addToDropHistory(itemWithId);
+    }, 5000);
+  };
+  
+  const claimItem = () => {
+    if (winItem) {
+      // Добавляем предмет в инвентарь
+      addToInventory(winItem);
+      
+      // Сбрасываем выигранный предмет
+      setWinItem(null);
+    }
+  };
+  
   return (
     <div className="min-h-screen flex flex-col">
-      <Navbar balance={1000} />
+      <Navbar />
       
       <main className="flex-1 container mx-auto px-4 py-8">
-        {/* Hero section */}
-        <div className="text-center mb-12 py-12">
-          <h1 className="text-4xl font-bold mb-4">
-            Открывай кейсы CS2, получай скины
-          </h1>
-          <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-            Самые популярные кейсы, максимальные шансы на дроп редких скинов и честная система выпадения предметов
-          </p>
-          <Button size="lg" className="px-8">
-            Начать открывать
-          </Button>
-        </div>
-        
-        {/* Cases grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {cases.map((caseItem) => (
-            <CaseCard
-              key={caseItem.id}
-              id={caseItem.id}
-              name={caseItem.name}
-              image={caseItem.image}
-              price={caseItem.price}
-              rarity={caseItem.rarity}
-              items={caseItem.items}
-            />
-          ))}
-        </div>
-        
-        {/* Features section */}
-        <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="bg-card border border-border/50 p-6 rounded-lg text-center">
-            <div className="text-4xl mb-3">🎮</div>
-            <h3 className="text-xl font-medium mb-2">Режим Апгрейд</h3>
-            <p className="text-muted-foreground">
-              Улучшай свои скины до более ценных с шансом на редкие предметы
-            </p>
+        <div className="grid grid-cols-12 gap-8">
+          {/* Лента выпадений слева */}
+          <div className="hidden lg:block lg:col-span-3">
+            <DropHistoryFeed />
           </div>
           
-          <div className="bg-card border border-border/50 p-6 rounded-lg text-center">
-            <div className="text-4xl mb-3">📑</div>
-            <h3 className="text-xl font-medium mb-2">Контракты обмена</h3>
-            <p className="text-muted-foreground">
-              Обменивай несколько предметов на один более высокого качества
-            </p>
-          </div>
-          
-          <div className="bg-card border border-border/50 p-6 rounded-lg text-center">
-            <div className="text-4xl mb-3">📈</div>
-            <h3 className="text-xl font-medium mb-2">Режим Краш</h3>
-            <p className="text-muted-foreground">
-              Рискни своими скинами и получи шанс умножить их стоимость
-            </p>
+          {/* Основной контент */}
+          <div className="col-span-12 lg:col-span-9">
+            {selectedCase ? (
+              <div>
+                <div className="flex justify-between items-center mb-6">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setSelectedCase(null);
+                      setWinItem(null);
+                    }}
+                    disabled={isSpinning}
+                  >
+                    Вернуться к списку кейсов
+                  </Button>
+                  
+                  <div className="text-xl font-bold">
+                    {selectedCase.name} - {selectedCase.price} ₽
+                  </div>
+                </div>
+                
+                {winItem ? (
+                  <div className="bg-card border border-border rounded-lg p-8 text-center">
+                    <h2 className="text-2xl font-bold mb-6">Вы выиграли!</h2>
+                    
+                    <div className={`inline-block border-2 rounded-lg p-6 mb-6 ${
+                      winItem.rarity === "rare" ? "bg-case-rare/20 border-case-rare" :
+                      winItem.rarity === "epic" ? "bg-case-epic/20 border-case-epic" :
+                      winItem.rarity === "legendary" ? "bg-case-legendary/20 border-case-legendary" :
+                      "bg-case-mythical/20 border-case-mythical"
+                    }`}>
+                      <div className="h-56 flex items-center justify-center mb-4">
+                        <img 
+                          src={winItem.image}
+                          alt={winItem.name}
+                          className="max-h-full object-contain"
+                        />
+                      </div>
+                      
+                      <div>
+                        <h3 className="text-xl font-bold mb-2">{winItem.name}</h3>
+                        <div className="text-2xl font-bold text-case-legendary mb-4">
+                          {winItem.price} ₽
+                        </div>
+                        
+                        <Button onClick={claimItem} size="lg">
+                          Забрать предмет
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    <div className="mt-6">
+                      <Button 
+                        onClick={() => {
+                          setWinItem(null);
+                          openCase(selectedCase);
+                        }}
+                        disabled={user?.balance < selectedCase.price}
+                      >
+                        Открыть еще раз ({selectedCase.price} ₽)
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <CaseWheel 
+                      caseData={selectedCase} 
+                      isSpinning={isSpinning}
+                    />
+                    
+                    <div className="text-center mt-8">
+                      <Button 
+                        size="lg"
+                        onClick={() => openCase(selectedCase)}
+                        disabled={isSpinning || (isAuthenticated && user?.balance < selectedCase.price)}
+                      >
+                        {isSpinning ? "Открывается..." : `Открыть за ${selectedCase.price} ₽`}
+                      </Button>
+                    </div>
+                    
+                    <div className="mt-8">
+                      <h2 className="text-xl font-bold mb-4">Содержимое кейса</h2>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                        {selectedCase.items.map((item) => (
+                          <div 
+                            key={item.id}
+                            className={`border-2 rounded-lg p-4 ${
+                              item.rarity === "rare" ? "bg-case-rare/20 border-case-rare" :
+                              item.rarity === "epic" ? "bg-case-epic/20 border-case-epic" :
+                              item.rarity === "legendary" ? "bg-case-legendary/20 border-case-legendary" :
+                              "bg-case-mythical/20 border-case-mythical"
+                            }`}
+                          >
+                            <div className="h-24 flex items-center justify-center mb-2">
+                              <img
+                                src={item.image}
+                                alt={item.name}
+                                className="max-h-full object-contain"
+                              />
+                            </div>
+                            <div className="text-xs font-medium truncate">
+                              {item.name}
+                            </div>
+                            <div className="text-xs font-medium text-case-legendary">
+                              {item.price} ₽
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <>
+                <h1 className="text-3xl font-bold mb-8">Доступные кейсы</h1>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {cases.map((caseItem) => (
+                    <CaseCard
+                      key={caseItem.id}
+                      {...caseItem}
+                      onClick={() => setSelectedCase(caseItem)}
+                    />
+                  ))}
+                </div>
+                
+                {/* Мобильная версия ленты выпадений */}
+                <div className="block lg:hidden mt-8">
+                  <DropHistoryFeed />
+                </div>
+              </>
+            )}
           </div>
         </div>
       </main>
-      
-      <footer className="bg-card/50 border-t border-border py-6">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row justify-between items-center">
-            <div className="text-center md:text-left mb-4 md:mb-0">
-              <div className="text-xl font-bold bg-gradient-to-r from-primary to-case-mythical bg-clip-text text-transparent">
-                CS2 CASES
-              </div>
-              <p className="text-sm text-muted-foreground mt-1">
-                © 2025 CS2 Cases. Все права защищены.
-              </p>
-            </div>
-            
-            <div className="flex space-x-4">
-              <Button variant="ghost" size="sm">Пользовательское соглашение</Button>
-              <Button variant="ghost" size="sm">Политика конфиденциальности</Button>
-              <Button variant="ghost" size="sm">Тех. поддержка</Button>
-            </div>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 };

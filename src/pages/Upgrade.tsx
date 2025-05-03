@@ -6,14 +6,21 @@ import LoginModal from "@/components/LoginModal";
 import { useToast } from "@/components/ui/use-toast";
 import { InventoryItem } from "@/context/AuthContext";
 import cases from "@/data/cases";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Slider } from "@/components/ui/slider";
 import { 
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Info } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Info, CheckCircle2, XCircle } from "lucide-react";
 
 // Объединяем все предметы из всех кейсов для выбора цели апгрейда
 const allItems = cases.flatMap(caseItem => 
@@ -33,13 +40,16 @@ const rarityClasses = {
 const Upgrade = () => {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  const [pendingItem, setPendingItem] = useState<InventoryItem | null>(null); // Предмет в ожидании апгрейда
+  const [resultItem, setResultItem] = useState<InventoryItem | null>(null); // Результат апгрейда
   const [possibleTargets, setPossibleTargets] = useState<any[]>([]);
   const [targetItem, setTargetItem] = useState<any | null>(null);
   const [upgradeChance, setUpgradeChance] = useState<number>(50);
   const [isSpinning, setIsSpinning] = useState(false);
   const [spinResult, setSpinResult] = useState<"win" | "lose" | null>(null);
   const [userInvItems, setUserInvItems] = useState<InventoryItem[]>([]);
-  const { isAuthenticated, user, updateBalance, removeFromInventory, addToInventory } = useAuth();
+  const [isResultDialogOpen, setIsResultDialogOpen] = useState(false);
+  const { isAuthenticated, user, updateBalance, removeFromInventory, addToInventory, addToDropHistory } = useAuth();
   const { toast } = useToast();
   const wheelRef = useRef<HTMLDivElement>(null);
   const arrowRef = useRef<HTMLDivElement>(null);
@@ -110,7 +120,7 @@ const Upgrade = () => {
   }
 
   // Проверяем, есть ли предметы в инвентаре
-  if (userInvItems.length === 0) {
+  if (userInvItems.length === 0 && !pendingItem && !resultItem) {
     return (
       <div className="min-h-screen flex flex-col">
         <Navbar />
@@ -138,11 +148,12 @@ const Upgrade = () => {
   const handleStartUpgrade = () => {
     if (!selectedItem || !targetItem) return;
     
-    // Удаляем предмет из локального состояния
-    setUserInvItems(userInvItems.filter(item => item.id !== selectedItem.id));
+    // Теперь мы помещаем предмет в состояние ожидания, а не удаляем сразу
+    setPendingItem(selectedItem);
     
-    // Удаляем предмет из инвентаря
-    removeFromInventory(selectedItem.id);
+    // Удаляем предмет из локального состояния UI
+    setUserInvItems(userInvItems.filter(item => item.id !== selectedItem.id));
+    setSelectedItem(null);
     
     setIsSpinning(true);
     setSpinResult(null);
@@ -166,7 +177,7 @@ const Upgrade = () => {
         finalAngle = redStartAngle + Math.random() * (360 - greenAngle); // Случайный угол в пределах красной зоны
       }
       
-      // Добавляем несколько полных оборотов для эффекта
+      // Добавляем несколько полных оборотов только по часовой стрелке
       const fullRotations = 2 + Math.floor(Math.random() * 3); // От 2 до 4 полных оборотов
       const totalAngle = 360 * fullRotations + finalAngle;
       
@@ -182,37 +193,33 @@ const Upgrade = () => {
       ];
       const randomEasing = easingFunctions[Math.floor(Math.random() * easingFunctions.length)];
       
-      // Применяем анимацию
+      // Применяем анимацию только по часовой стрелке (положительный угол)
       arrowRef.current.style.transition = `transform ${spinDuration}s ${randomEasing}`;
-      arrowRef.current.style.transform = `rotate(${totalAngle}deg)`;
+      arrowRef.current.style.transform = `rotate(${Math.abs(totalAngle)}deg)`;
       
       setTimeout(() => {
         setSpinResult(isSuccessful ? "win" : "lose");
         
         if (isSuccessful) {
-          // Добавляем новый предмет в инвентарь только при успешном апгрейде
+          // Сохраняем результат апгрейда для отображения в диалоге
           const newItem = {
             ...targetItem,
             id: `${targetItem.id}_${Date.now()}`, // Уникальный ID для инвентаря
           };
+          setResultItem(newItem);
           
-          addToInventory(newItem);
-          
-          toast({
-            title: "Успешный апгрейд!",
-            description: `Вы успешно улучшили предмет до ${targetItem.name}`,
-          });
+          // Добавляем в историю выпадений
+          addToDropHistory(newItem);
         } else {
-          toast({
-            title: "Неудачный апгрейд",
-            description: "К сожалению, ваш предмет был потерян при апгрейде",
-            variant: "destructive"
-          });
+          // Сохраняем информацию о проигрыше
+          setResultItem(null);
         }
         
-        // Сбрасываем выбранный предмет после завершения
+        // Показываем диалог с результатом
+        setIsResultDialogOpen(true);
+        
+        // Сбрасываем вращение
         setTimeout(() => {
-          setSelectedItem(null);
           setIsSpinning(false);
           
           // Сбрасываем позицию стрелки (без анимации)
@@ -220,9 +227,39 @@ const Upgrade = () => {
             arrowRef.current.style.transition = 'none';
             arrowRef.current.style.transform = 'rotate(0deg)';
           }
-        }, 2000);
+        }, 1000);
       }, spinDuration * 1000);
     }
+  };
+
+  const handleClaimResult = () => {
+    // Если апгрейд был успешным и есть предмет для получения
+    if (spinResult === "win" && resultItem) {
+      // Добавляем выигранный предмет в инвентарь
+      addToInventory(resultItem);
+      
+      toast({
+        title: "Предмет получен",
+        description: `${resultItem.name} добавлен в ваш инвентарь`,
+      });
+    } else {
+      // При проигрыше предмет полностью пропадает
+      toast({
+        title: "Предмет потерян",
+        description: "К сожалению, ваш предмет был потерян при апгрейде",
+        variant: "destructive"
+      });
+    }
+    
+    // В любом случае удаляем исходный предмет из инвентаря
+    if (pendingItem) {
+      removeFromInventory(pendingItem.id);
+    }
+    
+    // Сбрасываем состояние
+    setPendingItem(null);
+    setResultItem(null);
+    setIsResultDialogOpen(false);
   };
 
   const selectTargetItem = (item: any) => {
@@ -274,7 +311,7 @@ const Upgrade = () => {
           
           {/* Центральная панель - апгрейд */}
           <div className="lg:col-span-1 flex flex-col">
-            {selectedItem ? (
+            {selectedItem || pendingItem ? (
               <div className="flex-1 flex flex-col">
                 {/* Настройка шанса */}
                 <div className="bg-card border border-border rounded-lg p-6 mb-6">
@@ -330,17 +367,17 @@ const Upgrade = () => {
                   <div className="flex-1 flex flex-col items-center justify-center">
                     <div className="flex items-center w-full mb-8">
                       {/* Исходный предмет */}
-                      <div className={`w-1/3 p-2 border-2 rounded-lg ${rarityClasses[selectedItem.rarity]}`}>
+                      <div className={`w-1/3 p-2 border-2 rounded-lg ${rarityClasses[pendingItem?.rarity || selectedItem?.rarity]}`}>
                         <img
-                          src={selectedItem.image}
-                          alt={selectedItem.name}
+                          src={pendingItem?.image || selectedItem?.image}
+                          alt={pendingItem?.name || selectedItem?.name}
                           className="h-20 w-auto object-contain mx-auto mb-1"
                         />
                         <div className="text-xs font-medium truncate text-center">
-                          {selectedItem.name}
+                          {pendingItem?.name || selectedItem?.name}
                         </div>
                         <div className="text-xs text-case-legendary text-center">
-                          {selectedItem.price} ₽
+                          {pendingItem?.price || selectedItem?.price} ₽
                         </div>
                       </div>
                       
@@ -438,9 +475,9 @@ const Upgrade = () => {
                   <Button 
                     className="w-full"
                     onClick={handleStartUpgrade}
-                    disabled={!selectedItem || !targetItem || isSpinning}
+                    disabled={!selectedItem || !targetItem || isSpinning || !!pendingItem}
                   >
-                    {isSpinning ? "Идет апгрейд..." : "Апгрейд"}
+                    {isSpinning ? "Идет апгрейд..." : pendingItem ? "Ожидание..." : "Апгрейд"}
                   </Button>
                 </div>
               </div>
@@ -461,7 +498,7 @@ const Upgrade = () => {
           <div className="lg:col-span-1 bg-card border border-border rounded-lg p-6">
             <h2 className="text-xl font-bold mb-4">Целевой предмет</h2>
             
-            {selectedItem && possibleTargets.length > 0 ? (
+            {(selectedItem || pendingItem) && possibleTargets.length > 0 ? (
               <div className="flex flex-col">
                 {/* Выбранный целевой предмет */}
                 <div className={`border-2 rounded-lg p-6 mb-4 ${rarityClasses[targetItem.rarity]}`}>
@@ -489,7 +526,7 @@ const Upgrade = () => {
                 <div className="mb-4">
                   <div className="text-sm mb-2">Коэффициент апгрейда:</div>
                   <div className="text-2xl font-bold text-case-legendary">
-                    x{(targetItem.price / selectedItem.price).toFixed(2)}
+                    x{(targetItem.price / (pendingItem?.price || selectedItem?.price)).toFixed(2)}
                   </div>
                 </div>
                 
@@ -521,7 +558,7 @@ const Upgrade = () => {
                   </div>
                 </div>
               </div>
-            ) : selectedItem && possibleTargets.length === 0 ? (
+            ) : (selectedItem || pendingItem) && possibleTargets.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-center">
                 <div className="text-4xl mb-4">⚠️</div>
                 <p className="text-muted-foreground">
@@ -540,6 +577,55 @@ const Upgrade = () => {
           </div>
         </div>
       </main>
+
+      {/* Диалог результатов апгрейда */}
+      <Dialog open={isResultDialogOpen} onOpenChange={setIsResultDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-center text-2xl">
+              {spinResult === "win" ? "Успешный апгрейд!" : "Неудачный апгрейд"}
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="flex flex-col items-center py-6">
+            {spinResult === "win" && resultItem ? (
+              <>
+                <CheckCircle2 className="h-16 w-16 text-green-500 mb-4" />
+                <div className={`border-2 rounded-lg p-4 ${rarityClasses[resultItem.rarity]}`}>
+                  <img
+                    src={resultItem.image}
+                    alt={resultItem.name}
+                    className="h-32 w-auto object-contain mx-auto mb-2"
+                  />
+                  <div className="text-center">
+                    <div className="font-medium">{resultItem.name}</div>
+                    <div className="text-case-legendary font-bold">{resultItem.price} ₽</div>
+                  </div>
+                </div>
+                <p className="mt-4 text-center text-muted-foreground">
+                  Поздравляем! Вы успешно улучшили предмет.
+                </p>
+              </>
+            ) : (
+              <>
+                <XCircle className="h-16 w-16 text-red-500 mb-4" />
+                <p className="text-center text-muted-foreground">
+                  К сожалению, апгрейд не удался. Ваш предмет был потерян.
+                </p>
+              </>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              className="w-full" 
+              onClick={handleClaimResult}
+            >
+              {spinResult === "win" ? "Забрать предмет" : "Закрыть"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
