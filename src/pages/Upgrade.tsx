@@ -265,6 +265,14 @@ const Upgrade = () => {
     }
   };
 
+  // Закрытие диалога результатов с обязательным вызовом handleClaimResult
+  const handleDialogClose = (open: boolean) => {
+    if (!open) {
+      handleClaimResult(); // Всегда вызываем функцию получения результата при закрытии диалога
+    }
+    setIsResultDialogOpen(open);
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
@@ -576,7 +584,7 @@ const Upgrade = () => {
       </main>
 
       {/* Диалог результатов апгрейда */}
-      <Dialog open={isResultDialogOpen} onOpenChange={(open) => !open && handleClaimResult()}>
+      <Dialog open={isResultDialogOpen} onOpenChange={handleDialogClose}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-center text-2xl">

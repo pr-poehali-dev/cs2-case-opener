@@ -5,10 +5,6 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 import { cases } from "@/data/cases";
 import CaseWheel from "@/components/CaseWheel";
-import { 
-  ToggleGroup, 
-  ToggleGroupItem 
-} from "@/components/ui/toggle-group";
 
 const Index = () => {
   const [selectedCase, setSelectedCase] = useState(null);
@@ -16,6 +12,44 @@ const Index = () => {
   const [winItem, setWinItem] = useState(null);
   const [openCount, setOpenCount] = useState(1); // Количество кейсов для открытия
   const { isAuthenticated, user, updateBalance, addToInventory, addToDropHistory } = useAuth();
+
+  // Функция для быстрого открытия кейса (без анимации)
+  const openCaseQuick = (selectedCase) => {
+    if (!isAuthenticated) {
+      return;
+    }
+    
+    // Проверяем, достаточно ли средств
+    const totalCost = selectedCase.price * openCount;
+    if (user.balance < totalCost) {
+      alert(`Недостаточно средств для открытия ${openCount} кейсов. Необходимо: ${totalCost} ₽`);
+      return;
+    }
+    
+    // Списываем стоимость кейсов с баланса
+    updateBalance(-totalCost);
+    
+    // Определяем выигрыш для каждого открытого кейса и сразу добавляем в инвентарь
+    for (let i = 0; i < openCount; i++) {
+      // Выбираем случайный предмет из кейса
+      const randomItem = selectedCase.items[Math.floor(Math.random() * selectedCase.items.length)];
+      
+      // Создаем уникальный ID для предмета
+      const itemWithId = {
+        ...randomItem,
+        id: `${randomItem.id}_${Date.now()}_${i}`
+      };
+      
+      // Добавляем в инвентарь
+      addToInventory(itemWithId);
+      
+      // Добавляем в историю выпадений
+      addToDropHistory(itemWithId);
+    }
+    
+    // Сбрасываем количество на 1 после открытия
+    setOpenCount(1);
+  };
 
   const openCase = (selectedCase) => {
     if (!isAuthenticated) {
@@ -50,15 +84,17 @@ const Index = () => {
           id: `${randomItem.id}_${Date.now()}_${i}`
         };
         
+        // Добавляем в список выигрышей
+        wins.push(itemWithId);
+        
         // Добавляем в историю выпадений
         addToDropHistory(itemWithId);
-        wins.push(itemWithId);
       }
       
       // Устанавливаем последний выигранный предмет для отображения
       setWinItem(wins[wins.length - 1]);
       
-      // Если открыто больше 1 кейса, добавляем остальные предметы в инвентарь автоматически
+      // Если открыто больше 1 кейса, добавляем предыдущие предметы в инвентарь автоматически
       if (openCount > 1) {
         for (let i = 0; i < wins.length - 1; i++) {
           addToInventory(wins[i]);
@@ -160,9 +196,9 @@ const Index = () => {
               <>
                 {/* Кнопки выбора количества для открытия */}
                 {getMaxOpenCount() > 1 && (
-                  <div className="mb-6">
-                    <h3 className="font-medium mb-2">Количество открытий:</h3>
-                    <div className="flex items-center space-x-2">
+                  <div className="mb-6 bg-card border border-border rounded-lg p-4">
+                    <h3 className="font-medium mb-3">Количество открытий:</h3>
+                    <div className="flex flex-wrap items-center gap-2">
                       <Button 
                         variant={openCount === 1 ? "default" : "outline"}
                         size="sm"
@@ -223,14 +259,29 @@ const Index = () => {
                   isSpinning={isSpinning}
                 />
                 
-                <div className="text-center mt-8">
-                  <Button 
-                    size="lg"
-                    onClick={() => openCase(selectedCase)}
-                    disabled={isSpinning || (isAuthenticated && user?.balance < selectedCase.price * openCount)}
-                  >
-                    {isSpinning ? "Открывается..." : `Открыть ${openCount > 1 ? openCount + ' кейсов' : 'кейс'} за ${selectedCase.price * openCount} ₽`}
-                  </Button>
+                <div className="text-center mt-8 space-y-4">
+                  <div className="flex justify-center gap-4">
+                    <Button 
+                      size="lg"
+                      onClick={() => openCase(selectedCase)}
+                      disabled={isSpinning || (isAuthenticated && user?.balance < selectedCase.price * openCount)}
+                    >
+                      {isSpinning ? "Открывается..." : `Открыть ${openCount > 1 ? openCount + ' кейсов' : 'кейс'} за ${selectedCase.price * openCount} ₽`}
+                    </Button>
+                    
+                    <Button 
+                      size="lg"
+                      variant="outline"
+                      onClick={() => openCaseQuick(selectedCase)}
+                      disabled={isSpinning || (isAuthenticated && user?.balance < selectedCase.price * openCount)}
+                    >
+                      Открыть быстро
+                    </Button>
+                  </div>
+                  
+                  <div className="text-xs text-muted-foreground">
+                    Быстрое открытие пропускает анимацию и сразу добавляет предметы в инвентарь
+                  </div>
                 </div>
                 
                 <div className="mt-8">
