@@ -10,17 +10,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
 import LoginModal from "@/components/LoginModal";
@@ -89,11 +78,11 @@ const Inventory = () => {
       // Подсчитываем общую стоимость
       const totalValue = calculateTotalValue();
       
-      // Добавляем общую стоимость к балансу пользователя
-      updateBalance(totalValue);
-      
       // Очищаем весь инвентарь
       clearInventory();
+      
+      // Добавляем общую стоимость к балансу пользователя
+      updateBalance(totalValue);
       
       toast({
         title: "Все предметы проданы",

@@ -49,7 +49,7 @@ const Upgrade = () => {
   const [spinResult, setSpinResult] = useState<"win" | "lose" | null>(null);
   const [userInvItems, setUserInvItems] = useState<InventoryItem[]>([]);
   const [isResultDialogOpen, setIsResultDialogOpen] = useState(false);
-  const { isAuthenticated, user, updateBalance, removeFromInventory, addToInventory, addToDropHistory } = useAuth();
+  const { isAuthenticated, user, updateBalance, removeFromInventory, addToInventory } = useAuth();
   const { toast } = useToast();
   const wheelRef = useRef<HTMLDivElement>(null);
   const arrowRef = useRef<HTMLDivElement>(null);
@@ -177,7 +177,7 @@ const Upgrade = () => {
         finalAngle = redStartAngle + Math.random() * (360 - greenAngle); // Случайный угол в пределах красной зоны
       }
       
-      // Добавляем несколько полных оборотов только по часовой стрелке
+      // Добавляем несколько полных оборотов только по часовой стрелке (положительный угол)
       const fullRotations = 2 + Math.floor(Math.random() * 3); // От 2 до 4 полных оборотов
       const totalAngle = 360 * fullRotations + finalAngle;
       
@@ -207,9 +207,6 @@ const Upgrade = () => {
             id: `${targetItem.id}_${Date.now()}`, // Уникальный ID для инвентаря
           };
           setResultItem(newItem);
-          
-          // Добавляем в историю выпадений
-          addToDropHistory(newItem);
         } else {
           // Сохраняем информацию о проигрыше
           setResultItem(null);
@@ -408,7 +405,7 @@ const Upgrade = () => {
                       )}
                     </div>
                     
-                    {/* Новое круговое колесо апгрейда со стрелкой */}
+                    {/* Круговое колесо апгрейда со стрелкой */}
                     <div className="relative w-64 h-64 mb-4">
                       {/* Круг с зеленой и красной секциями */}
                       <svg className="w-full h-full" viewBox="0 0 100 100">
@@ -579,7 +576,7 @@ const Upgrade = () => {
       </main>
 
       {/* Диалог результатов апгрейда */}
-      <Dialog open={isResultDialogOpen} onOpenChange={setIsResultDialogOpen}>
+      <Dialog open={isResultDialogOpen} onOpenChange={(open) => !open && handleClaimResult()}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-center text-2xl">
