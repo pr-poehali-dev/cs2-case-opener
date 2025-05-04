@@ -78,15 +78,18 @@ const Inventory = () => {
       // Подсчитываем общую стоимость
       const totalValue = calculateTotalValue();
       
-      // Очищаем весь инвентарь
-      clearInventory();
+      // Сохраняем количество предметов
+      const itemCount = user.inventory.length;
       
       // Добавляем общую стоимость к балансу пользователя
       updateBalance(totalValue);
       
+      // Очищаем весь инвентарь
+      clearInventory();
+      
       toast({
         title: "Все предметы проданы",
-        description: `Вы продали ${user.inventory.length} предметов за ${totalValue} ₽`,
+        description: `Вы продали ${itemCount} предметов за ${totalValue} ₽`,
       });
       
       setIsSellAllDialogOpen(false);
